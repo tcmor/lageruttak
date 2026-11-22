@@ -1,14 +1,18 @@
 rules_version = '2';
-// Bilder av skannede originalark. Bare kontoret (rolle admin) kan se, laste opp og slette.
+// Bilder av skannede originalark. Kontoret (admin) og kontroll kan se, laste opp og slette.
 service firebase.storage {
   match /b/{bucket}/o {
-    function erAdmin() {
+    function erKontor() {
       return request.auth != null &&
-        firestore.get(/databases/(default)/documents/roller/$(request.auth.uid)).data.rolle == "admin";
+        firestore.get(/databases/(default)/documents/roller/$(request.auth.uid)).data.rolle in ["admin", "kontroll"];
+    }
+    // E-postvedlegg lagt hit av skyfunksjonen «innboks»
+    match /innboks/{fil} {
+      allow read, delete: if erKontor();
     }
     match /skann/{id} {
-      allow read, delete: if erAdmin();
-      allow create, update: if erAdmin() && request.resource.size < 15 * 1024 * 1024;
+      allow read, delete: if erKontor();
+      allow create, update: if erKontor() && request.resource.size < 15 * 1024 * 1024;
     }
   }
 }

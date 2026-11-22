@@ -1,6 +1,7 @@
 rules_version = '2';
 // Roller: roller/{uid} = { rolle: "admin" | "montor", navn: "..." }
 // admin = kontoret (ser priser, kost, bestillinger, kan endre alt)
+// kontroll = sjekker skannede ark, sender til regnskap, bestiller og leser innpriser
 // montor = ser registrerte uttak, kan ikke se priser eller endre andres data
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -8,7 +9,8 @@ service cloud.firestore {
     function rolleSti() { return /databases/$(database)/documents/roller/$(request.auth.uid); }
     function harRolle(r) { return innlogget() && exists(rolleSti()) && get(rolleSti()).data.rolle in r; }
     function erAdmin()  { return harRolle(["admin"]); }
-    function erAnsatt() { return harRolle(["admin", "montor"]); }
+    function erKontor() { return harRolle(["admin", "kontroll"]); }
+    function erAnsatt() { return harRolle(["admin", "kontroll", "montor"]); }
 
     match /roller/{uid} {
       allow read: if innlogget() && (request.auth.uid == uid || erAdmin());
@@ -16,15 +18,21 @@ service cloud.firestore {
     }
     match /uttak/{id} {
       allow read, create: if erAnsatt();
-      allow update, delete: if erAdmin();
+      allow update, delete: if erKontor();
     }
     match /strekkoder/{id} {
       allow read: if erAnsatt();
       allow write: if erAdmin();
     }
-    // Priser, kostpriser, bestillinger og innstillinger: bare kontoret
-    match /config/{id}       { allow read, write: if erAdmin(); }
-    match /kost/{id}         { allow read, write: if erAdmin(); }
-    match /bestillinger/{id} { allow read, write: if erAdmin(); }
+    // Priser og innstillinger: kontoret og kontroll leser, bare admin endrer
+    // (kontroll får skrive løpenumrene for ark og IO, og leverandøradresser ved bestilling)
+    match /config/{id} {
+      allow read: if erKontor();
+      allow write: if erAdmin() || (erKontor() && id in ["arknr", "ionr", "leverandorer"]);
+    }
+    match /kost/{id}         { allow read, write: if erKontor(); }
+    match /bestillinger/{id} { allow read, write: if erKontor(); }
+    // Ark som har kommet inn på e-post (skrives av skyfunksjonen «innboks»)
+    match /innboks/{id}      { allow read, write: if erKontor(); }
   }
 }

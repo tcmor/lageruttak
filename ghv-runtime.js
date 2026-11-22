@@ -27,6 +27,8 @@
   const REGION = window.GHV_FUNCTIONS_REGION || "europe-west1";
   const storage = firebase.storage ? firebase.storage() : null;
   let rolle = null, navn = "";
+  // admin = kontoret (alt). kontroll = sjekker skannede ark, sender til regnskap og ser innpriser (kan ikke endre priser).
+  const erKontor = () => rolle === "admin" || rolle === "kontroll";
 
   /* ---------- Innlogging ---------- */
   const css = `
@@ -114,7 +116,7 @@
     whenBody(() => {
       const h = document.querySelector("header"); if (!h || h.querySelector(".ghv-userbar")) return;
       h.append(el("div", { class: "ghv-userbar" },
-        el("span", {}, `Innlogget som ${navn || u.email}${rolle === "admin" ? " (kontor)" : ""}.`),
+        el("span", {}, `Innlogget som ${navn || u.email}${rolle === "admin" ? " (kontor)" : rolle === "kontroll" ? " (kontroll)" : ""}.`),
         el("button", { type: "button", onclick: () => auth.signOut().then(() => location.reload()) }, "Logg ut")));
     });
   }
@@ -133,7 +135,8 @@
         const s = await fs.collection("roller").doc(u.uid).get();
         rolle = s.exists ? s.data().rolle : null; navn = s.exists ? (s.data().navn || "") : "";
       } catch { rolle = null; }
-      if (rolle !== "admin" && rolle !== "montor") { showNoAccess(u); return; }
+      if (!["admin", "kontroll", "montor"].includes(rolle)) { showNoAccess(u); return; }
+      window.ghvRolle = rolle;
       hideLogin(); userBar(u); resolve(u);
     });
   });
@@ -170,13 +173,13 @@
       await ready;
       return {
         id: async () => auth.currentUser && auth.currentUser.uid,
-        canEdit: async () => rolle === "admin",
-        can: async p => p === "data.write" ? (rolle === "admin" || rolle === "montor") : true
+        canEdit: async () => erKontor(),
+        can: async p => p === "data.write" ? ["admin", "kontroll", "montor"].includes(rolle) : true
       };
     },
     async downloads() { return { save: async ({ filename, data }) => lastNed(filename, data) }; },
     async sample() {
-      await ready; if (rolle !== "admin") return null;
+      await ready; if (!erKontor()) return null;
       const call = firebase.app().functions(REGION).httpsCallable("lesArk", { timeout: 180000 });
       return {
         async json(prompt, opts) {
@@ -198,7 +201,7 @@
       };
     },
     async assets() {
-      await ready; if (!storage || rolle !== "admin") return null;
+      await ready; if (!storage || !erKontor()) return null;
       const ref = id => storage.ref("skann/" + String(id).replace(/[^\w-]/g, ""));
       return {
         async upload(blob) {
@@ -214,7 +217,7 @@
   // Henter en fil fra innboksen (e-postvedlegg lagret av skyfunksjonen «innboks»). Bare kontoret.
   window.ghvHentFil = async sti => {
     await ready;
-    if (!storage || rolle !== "admin") throw feil("not_granted");
+    if (!storage || !erKontor()) throw feil("not_granted");
     const url = await storage.ref(String(sti)).getDownloadURL();
     const r = await fetch(url);
     if (!r.ok) throw feil("error", "HTTP " + r.status);
