@@ -1,0 +1,6 @@
+node_modules/
+functions/node_modules/
+*.log
+.firebase/
+# Eksporterte data skal aldri ligge i repoet
+*-eksport*.json

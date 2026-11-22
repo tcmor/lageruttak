@@ -1,0 +1,14 @@
+rules_version = '2';
+// Bilder av skannede originalark. Bare kontoret (rolle admin) kan se, laste opp og slette.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function erAdmin() {
+      return request.auth != null &&
+        firestore.get(/databases/(default)/documents/roller/$(request.auth.uid)).data.rolle == "admin";
+    }
+    match /skann/{id} {
+      allow read, delete: if erAdmin();
+      allow create, update: if erAdmin() && request.resource.size < 15 * 1024 * 1024;
+    }
+  }
+}
