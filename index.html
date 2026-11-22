@@ -35,6 +35,20 @@
   color-scheme:dark;
 }
 *,*::before,*::after{box-sizing:inherit}
+#v-hjem{padding-top:6px}
+.hj-hei{font-family:var(--cond);font-size:30px;margin:14px 2px 4px}
+.hj-led{margin:0 2px 12px;color:var(--muted)}
+.hj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:12px}
+.hj-kort{display:grid;gap:4px;align-content:start;padding:14px 16px;border-radius:6px;background:var(--surface);border:1px solid var(--line);color:var(--ink);text-decoration:none;min-height:96px}
+.hj-kort:hover{border-color:var(--ink)}
+.hj-kort:focus-visible{outline:3px solid var(--vis);outline-offset:2px}
+.hj-kort.venter{border-left:5px solid var(--vis)}
+.hj-t{font-family:var(--cond);font-weight:700;font-size:20px}
+.hj-d{font-size:.92rem;color:var(--muted)}
+.hj-n{justify-self:start;margin-top:4px;font-size:.85rem;font-weight:600;background:var(--vis);color:var(--vis-ink);padding:2px 8px;border-radius:3px}
+.hj-h3{font-family:var(--cond);font-size:20px;margin:22px 2px 6px}
+.hj-steg{margin:0 0 0 22px;padding:0;display:grid;gap:4px}
+.hj-fakta{margin-top:16px;padding:12px 14px;border-radius:6px;background:var(--surface);border:1px solid var(--line);display:grid;gap:4px;font-size:.92rem}
 body.lesepriser #v-priser .actions,body.lesepriser #v-priser .codes button{display:none}
 body.lesepriser #v-priser .kbtn{pointer-events:none}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
@@ -363,6 +377,8 @@ body.retur .useg button[aria-pressed="true"],body.kunde .useg button[aria-presse
     <div id="b-arkiv"></div>
   </section>
 
+  <section class="view" id="v-hjem" hidden></section>
+
   <section class="view" id="v-skann" hidden>
     <p class="banner" style="border-left-color:var(--line)">Last opp skannede uttaksark. Claude leser håndskriften, finner varene og prisene og spør deg om det som ikke kan leses sikkert. Godkjente ark legges inn som vanlige uttak og havner under Til regnskap.</p>
     <div class="group" id="sk-innboks" hidden style="padding:12px 14px;margin-top:14px">
@@ -410,6 +426,7 @@ body.retur .useg button[aria-pressed="true"],body.kunde .useg button[aria-presse
 </div>
 
 <nav class="tabs">
+  <a href="#hjem" data-v="hjem" id="tab-hjem">Hjem</a>
   <a href="#skann" data-v="skann" id="tab-skann" hidden>Skann</a>
   <a href="#uttak" data-v="uttak" id="tab-uttak">Uttak</a>
   <a href="#salg" data-v="salg" id="tab-salg" hidden>Salg</a>
@@ -692,7 +709,7 @@ function renderUttak(){
   renderRegnskap();
   $("#u-sendt").hidden=!canWrite||!isOffice||!list.some(u=>!u.fort);
   if(!db){ host.append(el("div",{class:"empty"},"Lagrede uttak vises her når appen er åpnet fra lenken i Claude.")); return; }
-  if(!list.length){ host.append(el("div",{class:"empty"}, uttak.length?"Ingen registreringer passer filteret.":"Ingen uttak ennå. Registrer det første under Nytt uttak.")); return; }
+  if(!list.length){ host.append(el("div",{class:"empty"}, uttak.length?"Ingen registreringer passer filteret.":"Ingen uttak ennå. Skannede ark som godkjennes, havner her.")); return; }
   for(const u of list){
     const isOpen=open.has(u.id), ret=u.type==="retur", m=missing(u);
     const card=el("div",{class:"card"+(u.fort?" done":"")});
@@ -876,14 +893,14 @@ async function savePrice(p,val){
 /* ---------- Routing ---------- */
 function route(){
   const papir=!MANUELL;
-  let v=(location.hash||"").slice(1); if(!["nytt","uttak","priser","etiketter","skann","bestill","salg"].includes(v)) v=(papir&&isOffice)?"skann":"nytt";
-  if(v==="nytt" && papir && isOffice) v="skann";
+  let v=(location.hash||"").slice(1); if(!["hjem","nytt","uttak","priser","etiketter","skann","bestill","salg"].includes(v)) v="hjem";
+  if(v==="nytt" && papir) v="hjem";
   if((v==="priser"||v==="etiketter"||v==="skann"||v==="bestill"||v==="salg") && !isOffice) v="nytt";
   if(window.ghvRolle==="kontroll" && (v==="etiketter"||v==="salg")) v="skann";
-  for(const s of ["nytt","uttak","priser","etiketter","skann","bestill","salg"]) $("#v-"+s).hidden=s!==v;
+  for(const s of ["hjem","nytt","uttak","priser","etiketter","skann","bestill","salg"]) $("#v-"+s).hidden=s!==v;
   document.querySelectorAll("nav.tabs a").forEach(a=>{ if(a.dataset.v===v) a.setAttribute("aria-current","page"); else a.removeAttribute("aria-current"); });
   $("#savebar").hidden=v!=="nytt"||papir;
-  if(v==="uttak") renderUttak(); if(v==="priser") renderPrices(); if(v==="etiketter") renderLabels(); if(v==="skann"){ skRender(); renderSkjemaListe(); } if(v==="bestill") bsRender(); if(v==="salg") salgRender();
+  if(v==="hjem") renderHjem(); if(v==="uttak") renderUttak(); if(v==="priser") renderPrices(); if(v==="etiketter") renderLabels(); if(v==="skann"){ skRender(); renderSkjemaListe(); } if(v==="bestill") bsRender(); if(v==="salg") salgRender();
   window.scrollTo(0,0);
 }
 function applyRole(){
@@ -893,7 +910,7 @@ function applyRole(){
   const KONTROLL=window.ghvRolle==="kontroll";
   document.body.classList.toggle("lesepriser",KONTROLL);
   if(KONTROLL){ $("#tab-etiketter").hidden=true; $("#tab-salg").hidden=true; $("#adminnav").hidden=true; }
-  $("#tab-nytt").hidden=isOffice&&!MANUELL;
+  $("#tab-nytt").hidden=!MANUELL;
   $("#tab-nytt").textContent=(!MANUELL&&!isOffice)?"Info":"Nytt uttak";
   const nTabs=[...document.querySelectorAll("nav.tabs a")].filter(a=>!a.hidden).length;
   $("nav.tabs").style.gridTemplateColumns = `repeat(${nTabs},1fr)`;
@@ -1450,9 +1467,55 @@ async function skApprove(p,likevel){
   }catch(e){ toast("Arket ble ikke lagret. Prøv igjen."); }
   finally{ skBusy=false; skRender(); }
 }
+/* ---------- Hjem: startside tilpasset rollen ---------- */
+const HJEM={navn:null};
+function renderHjem(){
+  const host=$("#v-hjem"); if(!host) return; host.textContent="";
+  const rolle=window.ghvRolle||"", kontroll=rolle==="kontroll", admin=rolle==="admin";
+  if(myId && HJEM.navn===null && db){ HJEM.navn=""; db.collection("roller").doc(myId).get().then(s=>{ HJEM.navn=(s.exists&&s.data().navn)||""; if(!$("#v-hjem").hidden) renderHjem(); }).catch(()=>{}); }
+  const fornavn=(HJEM.navn||"").trim().split(/\s+/)[0];
+  host.append(el("h2",{class:"hj-hei"},fornavn?`Hei, ${fornavn}`:"Hei"));
+  if(!isOffice){
+    host.append(el("p",{class:"hj-led"},"Uttak og retur føres på papirskjema. Lever skjemaet på kontoret, så blir det skannet og lagt inn."));
+    host.append(el("ol",{class:"hj-steg"},
+      el("li",{},"Skriv prosjektnummer, dato og navnet ditt øverst på skjemaet."),
+      el("li",{},"Kryss av for uttak, retur eller til kunde."),
+      el("li",{},"Før opp antall pakker eller stykk for hver vare. Lengder skrives i mm."),
+      el("li",{},"Lever skjemaet på kontoret.")));
+    host.append(el("a",{href:"#uttak",class:"hj-kort"},el("span",{class:"hj-t"},"Registrert"),el("span",{class:"hj-d"},"Se uttak og retur som er lagt inn.")));
+    return;
+  }
+  let antRegnskap=0, antSalg=0;
+  try{ antRegnskap=rgGroups().length; }catch{}
+  try{ antSalg=uttak.filter(u=>(u.type==="kunde"||(u.type==="uttak"&&u.prosjektnr===SALGSPROSJEKT))&&!fakturert(u)).length; }catch{}
+  const ant=n=>n===1?"1 ":n+" ";
+  const kort=[
+    {v:"skann",t:"Skann",d:"Les inn skannede uttaksark og godkjenn dem.",n:innboks.length,nt:innboks.length===1?"1 nytt ark i innboksen":`${innboks.length} nye ark i innboksen`},
+    {v:"uttak",t:"Til regnskap",d:"IO-PDF per prosjekt til fakturamottak.",n:antRegnskap,nt:antRegnskap===1?"1 prosjekt venter":`${antRegnskap} prosjekter venter`},
+    admin?{v:"salg",t:"Salg",d:"Kundeuttak på prosjekt 202626 med utpris.",n:antSalg,nt:antSalg===1?"1 salg ikke fakturert":`${antSalg} salg ikke fakturert`}:null,
+    {v:"bestill",t:"Bestill",d:"Bestilling per leverandør."},
+    admin?{v:"etiketter",t:"Etiketter",d:"QR-etiketter til hyller og pakker."}:null,
+    {v:"priser",t:"Priser",d:kontroll?"Innpris og kostpris for alle varer.":"Innpris, utpris og innkjøpskilde for alle varer."}
+  ].filter(Boolean);
+  const grid=el("div",{class:"hj-grid"});
+  for(const k of kort) grid.append(el("a",{href:"#"+k.v,class:"hj-kort"+(k.n?" venter":"")},
+    el("span",{class:"hj-t"},k.t), el("span",{class:"hj-d"},k.d), k.n?el("span",{class:"hj-n"},k.nt):null));
+  host.append(grid);
+  host.append(el("h3",{class:"hj-h3"},"Slik går et uttak"),
+    el("ol",{class:"hj-steg"},
+      el("li",{},"Montøren fyller ut skjemaet."),
+      el("li",{},"Skjemaet skannes og sendes på e-post, og havner i innboksen under Skann."),
+      el("li",{},"Arket leses inn, kontrolleres og godkjennes."),
+      el("li",{},"IO-PDF sendes til fakturamottak under Til regnskap.")));
+  if(admin) host.append(el("div",{class:"hj-fakta"},
+    el("div",{},el("b",{},"Lagerprosjekt: "),"201010"),
+    el("div",{},el("b",{},"IO sendes til: "),"fakturamottak@ghv.no"),
+    el("div",{},el("b",{},"Salg til kunde: "),"prosjekt 202626")));
+}
 /* ---------- Innboks: ark sendt på e-post (fra kopimaskinen) ---------- */
 let innboks=[], innboksBusy=false;
 function innboksRender(){
+  if(!$("#v-hjem").hidden) renderHjem();
   const box=$("#sk-innboks"); if(!box) return;
   box.hidden=!isOffice||!innboks.length;
   if(!innboks.length) return;
@@ -2025,7 +2088,7 @@ buildItems(); renderCustom(); filterItems(); setMode(mode); applyRole();
     db.collection("config").doc("leverandorer").onSnapshot(s=>{ levInfo=(s.exists&&s.data())||{}; if(!$("#v-bestill").hidden) bsRender(); },()=>{});
     db.collection("bestillinger").orderBy("opprettet","desc").limit(200).onSnapshot(s=>{ bestillinger=s.docs.map(d=>({id:d.id,...d.data()})); if(!$("#v-bestill").hidden) bsArkiv(); },()=>{});
     db.collection("innboks").where("status","==","ny").onSnapshot(s=>{ innboks=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(a.mottatt).localeCompare(String(b.mottatt))); innboksRender(); },()=>{});
-    db.collection("kost").limit(1000).onSnapshot(s=>{ kost=Object.fromEntries(s.docs.map(d=>[d.id,d.data()])); if(!$("#v-uttak").hidden) renderUttak(); if(!$("#v-salg").hidden) salgRender(); },()=>{ toast("Kunne ikke hente kostpriser. Last siden på nytt."); });
+    db.collection("kost").limit(1000).onSnapshot(s=>{ kost=Object.fromEntries(s.docs.map(d=>[d.id,d.data()])); if(!$("#v-uttak").hidden) renderUttak(); if(!$("#v-salg").hidden) salgRender(); if(!$("#v-hjem").hidden) renderHjem(); },()=>{ toast("Kunne ikke hente kostpriser. Last siden på nytt."); });
   }
   db.collection("strekkoder").limit(1000).onSnapshot(s=>{
     for(const k of Object.keys(barcodes)) delete barcodes[k];
@@ -2033,7 +2096,7 @@ buildItems(); renderCustom(); filterItems(); setMode(mode); applyRole();
     store.set("lageruttak-strekkoder",barcodes); if(!$("#v-priser").hidden) renderPrices();
   },()=>{});
   db.collection("uttak").orderBy("opprettet","desc").limit(1000).onSnapshot(s=>{
-    uttak=s.docs.map(d=>({id:d.id,...d.data()})); renderProsjekter(); if(!$("#v-uttak").hidden) renderUttak();
+    uttak=s.docs.map(d=>({id:d.id,...d.data()})); renderProsjekter(); if(!$("#v-hjem").hidden) renderHjem(); if(!$("#v-uttak").hidden) renderUttak();
   },()=>{ toast("Kunne ikke hente uttak. Last siden på nytt."); });
 })();
 </script>
