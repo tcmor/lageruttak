@@ -64,10 +64,11 @@
     kids.flat().forEach(c => c != null && e.append(c));
     return e;
   }
-  let box;
+  let box, cssLagt = false;
+  function leggTilCss() { if (!cssLagt) { document.head.append(el("style", {}, css)); cssLagt = true; } }
   function overlay() {
     if (box) return box;
-    document.head.append(el("style", {}, css));
+    leggTilCss();
     box = el("div", { id: "ghv-login", role: "dialog", "aria-modal": "true", "aria-label": "Logg inn" });
     document.body.append(box);
     return box;
@@ -114,6 +115,7 @@
   function hideLogin() { if (box) box.hidden = true; }
   function userBar(u) {
     whenBody(() => {
+      leggTilCss();
       const h = document.querySelector("header"); if (!h || h.querySelector(".ghv-userbar")) return;
       h.append(el("div", { class: "ghv-userbar" },
         el("span", {}, `Innlogget som ${navn || u.email}${rolle === "admin" ? " (kontor)" : rolle === "kontroll" ? " (kontroll)" : ""}.`),
