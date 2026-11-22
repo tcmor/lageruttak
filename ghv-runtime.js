@@ -208,6 +208,15 @@
       };
     }
   };
+  // Henter en fil fra innboksen (e-postvedlegg lagret av skyfunksjonen «innboks»). Bare kontoret.
+  window.ghvHentFil = async sti => {
+    await ready;
+    if (!storage || rolle !== "admin") throw feil("not_granted");
+    const url = await storage.ref(String(sti)).getDownloadURL();
+    const r = await fetch(url);
+    if (!r.ok) throw feil("error", "HTTP " + r.status);
+    return r.blob();
+  };
   window.ghvBildeUrl = async id => { const a = await tjenester.assets(); if (!a) throw feil("not_granted"); return a.url(id); };
   window.claude = {
     use(navn) { const f = tjenester[navn]; return f ? f() : Promise.resolve(null); }

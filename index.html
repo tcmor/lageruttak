@@ -369,6 +369,12 @@ body.retur .useg button[aria-pressed="true"],body.kunde .useg button[aria-presse
       <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:.9rem"><input type="checkbox" id="vis-manuell" style="width:20px;height:20px"> Vis manuell registrering (fanen «Nytt uttak») på denne enheten</label>
       <div class="actions" id="skjema-liste"></div>
     </div>
+    <div class="group" id="sk-innboks" hidden style="padding:12px 14px;margin-top:14px">
+      <div class="it-name">Innboks fra e-post</div>
+      <div class="it-var" id="sk-innboks-txt" aria-live="polite"></div>
+      <div id="sk-innboks-liste" style="margin-top:6px;font-size:.9rem"></div>
+      <div class="actions"><button class="btn small primary" id="sk-innboks-hent" type="button">Hent og les</button></div>
+    </div>
     <label class="drop" id="sk-drop" for="sk-file"><b>Velg skannede filer</b><span>PDF, JPG eller PNG, gjerne mange sider. På PC kan du også dra filene hit.</span></label>
     <input type="file" id="sk-file" class="vh" accept="application/pdf,image/jpeg,image/png" multiple>
     <div class="it-var" id="sk-status" style="margin:10px 2px" aria-live="polite"></div>
@@ -1441,6 +1447,30 @@ async function skApprove(p,likevel){
   }catch(e){ toast("Arket ble ikke lagret. Prøv igjen."); }
   finally{ skBusy=false; skRender(); }
 }
+/* ---------- Innboks: ark sendt på e-post (fra kopimaskinen) ---------- */
+let innboks=[], innboksBusy=false;
+function innboksRender(){
+  const box=$("#sk-innboks"); if(!box) return;
+  box.hidden=!isOffice||!innboks.length;
+  if(!innboks.length) return;
+  $("#sk-innboks-txt").textContent=innboks.length===1?"1 fil har kommet inn og venter på å bli lest.":`${innboks.length} filer har kommet inn og venter på å bli lest.`;
+  const l=$("#sk-innboks-liste"); l.textContent="";
+  for(const x of innboks) l.append(el("div",{},`${x.fil}`, el("span",{class:"it-var"},` – ${x.fra||"ukjent avsender"}, ${x.mottatt?new Date(x.mottatt).toLocaleString("no-NO",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):""}`)));
+  const b=$("#sk-innboks-hent"); b.disabled=innboksBusy; b.textContent=innboksBusy?"Henter …":"Hent og les";
+}
+async function innboksHent(){
+  if(innboksBusy||!innboks.length||!window.ghvHentFil) return;
+  innboksBusy=true; innboksRender();
+  const filer=[], hentet=[];
+  for(const x of innboks.slice()){
+    try{ const blob=await window.ghvHentFil(x.sti); filer.push(new File([blob],x.fil,{type:x.type||blob.type})); hentet.push(x); }
+    catch{ toast(`Kunne ikke hente ${x.fil}`); }
+  }
+  for(const x of hentet){ try{ await db.collection("innboks").doc(x.id).update({status:"hentet",hentet:new Date().toISOString()}); }catch{} }
+  innboksBusy=false; innboksRender();
+  if(filer.length) skAddFiles(filer);
+}
+$("#sk-innboks-hent").addEventListener("click",innboksHent);
 $("#sk-file").addEventListener("change",e=>{ const f=[...(e.target.files||[])]; e.target.value=""; if(f.length) skAddFiles(f); });
 const skDrop=$("#sk-drop");
 ["dragover","dragenter"].forEach(t=>skDrop.addEventListener(t,e=>{ e.preventDefault(); skDrop.classList.add("over"); }));
@@ -1991,6 +2021,7 @@ buildItems(); renderCustom(); filterItems(); setMode(mode); applyRole();
     db.collection("config").doc("salg").onSnapshot(s=>{ const d=s.exists&&s.data(); if(d&&d.glava){ SALG.glava={...SALG.glava,...d.glava}; store.set("lageruttak-glavarabatt",SALG.glava); } if(!$("#v-salg").hidden) salgRender(); },()=>{});
     db.collection("config").doc("leverandorer").onSnapshot(s=>{ levInfo=(s.exists&&s.data())||{}; if(!$("#v-bestill").hidden) bsRender(); },()=>{});
     db.collection("bestillinger").orderBy("opprettet","desc").limit(200).onSnapshot(s=>{ bestillinger=s.docs.map(d=>({id:d.id,...d.data()})); if(!$("#v-bestill").hidden) bsArkiv(); },()=>{});
+    db.collection("innboks").where("status","==","ny").onSnapshot(s=>{ innboks=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(a.mottatt).localeCompare(String(b.mottatt))); innboksRender(); },()=>{});
     db.collection("kost").limit(1000).onSnapshot(s=>{ kost=Object.fromEntries(s.docs.map(d=>[d.id,d.data()])); if(!$("#v-uttak").hidden) renderUttak(); if(!$("#v-salg").hidden) salgRender(); },()=>{ toast("Kunne ikke hente kostpriser. Last siden på nytt."); });
   }
   db.collection("strekkoder").limit(1000).onSnapshot(s=>{
