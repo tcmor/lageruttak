@@ -363,17 +363,17 @@ body.retur .useg button[aria-pressed="true"],body.kunde .useg button[aria-presse
 
   <section class="view" id="v-skann" hidden>
     <p class="banner" style="border-left-color:var(--line)">Last opp skannede uttaksark. Claude leser håndskriften, finner varene og prisene og spør deg om det som ikke kan leses sikkert. Godkjente ark legges inn som vanlige uttak og havner under Til regnskap.</p>
-    <div class="group" style="padding:12px 14px;margin-top:14px">
-      <div class="it-name">Tomme skjema for utskrift</div>
-      <div class="it-var">Skriv ut, la montøren fylle ut, skann og last opp her. Skjemaene leses automatisk.</div>
-      <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:.9rem"><input type="checkbox" id="vis-manuell" style="width:20px;height:20px"> Vis manuell registrering (fanen «Nytt uttak») på denne enheten</label>
-      <div class="actions" id="skjema-liste"></div>
-    </div>
     <div class="group" id="sk-innboks" hidden style="padding:12px 14px;margin-top:14px">
       <div class="it-name">Innboks fra e-post</div>
       <div class="it-var" id="sk-innboks-txt" aria-live="polite"></div>
       <div id="sk-innboks-liste" style="margin-top:6px;font-size:.9rem"></div>
       <div class="actions"><button class="btn small primary" id="sk-innboks-hent" type="button">Hent og les</button></div>
+    </div>
+    <div class="group" style="padding:12px 14px;margin-top:14px">
+      <div class="it-name">Tomme skjema for utskrift</div>
+      <div class="it-var">Skriv ut, la montøren fylle ut, skann og last opp her. Skjemaene leses automatisk.</div>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:.9rem"><input type="checkbox" id="vis-manuell" style="width:20px;height:20px"> Vis manuell registrering (fanen «Nytt uttak») på denne enheten</label>
+      <div class="actions" id="skjema-liste"></div>
     </div>
     <label class="drop" id="sk-drop" for="sk-file"><b>Velg skannede filer</b><span>PDF, JPG eller PNG, gjerne mange sider. På PC kan du også dra filene hit.</span></label>
     <input type="file" id="sk-file" class="vh" accept="application/pdf,image/jpeg,image/png" multiple>
