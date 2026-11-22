@@ -51,9 +51,9 @@
   #ghv-login .ghv-msg{min-height:1.4em;font-size:14px}
   #ghv-login code{font-size:13px;word-break:break-all;background:rgba(255,255,255,.1);padding:2px 4px;border-radius:3px}
   .ghv-userbar{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;font-size:13px;margin-top:6px;color:var(--band-ink,#F3F5F4)}
-  header .ghv-userbar button{font:inherit;font-size:13px;font-weight:600;color:var(--band-ink,#F3F5F4)!important;background:transparent!important;
-    border:1px solid rgba(243,245,244,.7)!important;border-radius:3px;padding:3px 10px;cursor:pointer;min-height:0;width:auto;box-shadow:none}
-  header .ghv-userbar button:hover{background:rgba(255,255,255,.12)!important}
+  header .ghv-userbar button{font:inherit;font-size:14px;font-weight:700;color:var(--vis-ink,#1E2932)!important;background:var(--vis,#F1B434)!important;
+    border:0!important;border-radius:4px;padding:6px 14px;cursor:pointer;min-height:0;width:auto;box-shadow:none}
+  header .ghv-userbar button:hover{filter:brightness(1.08)}
   header .ghv-userbar button:focus-visible{outline:2px solid var(--vis,#F1B434);outline-offset:2px}`;
 
   function el(tag, attrs, ...kids) {
