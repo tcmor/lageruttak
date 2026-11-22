@@ -10,6 +10,8 @@ admin.initializeApp();
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
 const CLAUDE_MODEL = defineString("CLAUDE_MODEL", { default: "claude-sonnet-5-5" });
 const INNBOKS_TOKEN = defineSecret("INNBOKS_TOKEN");
+const POSTMARK_TOKEN = defineSecret("POSTMARK_TOKEN");
+const AVSENDER = defineString("AVSENDER", { default: "tcm@ghv.no" });
 
 const TYPER = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
@@ -110,5 +112,42 @@ exports.innboks = onRequest(
     }
     console.log(`Innboks: ${lagret} vedlegg lagret fra ${fra}`);
     res.status(200).json({ lagret });
+  }
+);
+
+/* Skyfunksjon «sendIO»: sender IO-PDF fra «Til regnskap» rett til fakturamottak via Postmark.
+ * Mottakeren er fast (fakturamottak@ghv.no) og kan ikke endres fra appen.
+ * Bare innloggede med rolle "admin" eller "kontroll" får sende.
+ */
+const FAKTURAMOTTAK = "fakturamottak@ghv.no";
+exports.sendIO = onCall(
+  { region: "europe-west1", secrets: [POSTMARK_TOKEN], timeoutSeconds: 60, memory: "256MiB", maxInstances: 3 },
+  async (req) => {
+    if (!req.auth) throw new HttpsError("unauthenticated", "Logg inn først.");
+    const r = await admin.firestore().doc(`roller/${req.auth.uid}`).get();
+    if (!r.exists || !["admin", "kontroll"].includes(r.data().rolle)) {
+      throw new HttpsError("permission-denied", "Bare kontoret kan sende til fakturamottak.");
+    }
+    const { filnavn, emne, tekst, pdf } = req.data || {};
+    if (typeof pdf !== "string" || !pdf || pdf.length > 14000000) throw new HttpsError("invalid-argument", "Mangler PDF.");
+    const navn = String(filnavn || "IO.pdf").replace(/[^\wæøåÆØÅ.\-]+/g, "_").slice(0, 120);
+    const res = await fetch("https://api.postmarkapp.com/email", {
+      method: "POST",
+      headers: { "Accept": "application/json", "Content-Type": "application/json", "X-Postmark-Server-Token": POSTMARK_TOKEN.value() },
+      body: JSON.stringify({
+        From: AVSENDER.value(), To: FAKTURAMOTTAK,
+        Subject: String(emne || navn).slice(0, 200),
+        TextBody: String(tekst || `Vedlagt: ${navn}`).slice(0, 5000),
+        Attachments: [{ Name: navn, Content: pdf, ContentType: "application/pdf" }],
+        MessageStream: "outbound",
+      }),
+    });
+    const svar = await res.json().catch(() => ({}));
+    if (!res.ok || svar.ErrorCode) {
+      console.error("Postmark svarte", res.status, JSON.stringify(svar));
+      throw new HttpsError("failed-precondition", svar.Message || "E-posten ble ikke sendt.");
+    }
+    await admin.firestore().collection("sendt").add({ til: FAKTURAMOTTAK, emne: String(emne || ""), filnavn: navn, av: req.auth.uid, tid: new Date().toISOString(), messageId: svar.MessageID || "" });
+    return { messageId: svar.MessageID || "", til: FAKTURAMOTTAK };
   }
 );
