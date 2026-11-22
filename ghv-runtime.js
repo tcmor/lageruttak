@@ -229,6 +229,14 @@
     if (!r.ok) throw feil("error", "HTTP " + r.status);
     return r.blob();
   };
+  // Sender IO-PDF til fakturamottak via skyfunksjonen «sendIO». Bare kontoret.
+  window.ghvSendIO = async ({ filnavn, emne, tekst, pdf }) => {
+    await ready;
+    if (!erKontor()) throw feil("not_granted");
+    const call = firebase.app().functions(REGION).httpsCallable("sendIO", { timeout: 60000 });
+    const r = await call({ filnavn, emne, tekst, pdf: await blobB64(pdf) });
+    return r.data;
+  };
   window.ghvBildeUrl = async id => { const a = await tjenester.assets(); if (!a) throw feil("not_granted"); return a.url(id); };
   window.claude = {
     use(navn) { const f = tjenester[navn]; return f ? f() : Promise.resolve(null); }

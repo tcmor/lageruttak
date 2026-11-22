@@ -258,7 +258,7 @@ body.retur .useg button[aria-pressed="true"],body.kunde .useg button[aria-presse
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
-<script src="ghv-runtime.js?v=20261122e"></script>
+<script src="ghv-runtime.js?v=20261122f"></script>
 </head>
 <body>
 <header class="top">
@@ -1927,6 +1927,37 @@ async function rgDownload(groups){
   finally{ rgBusy=false; }
 }
 async function rgMail(key,list){
+  if(rgBusy) return; if(!prices){ toast("Prislisten er ikke lastet ennå"); return; }
+  const navn=key.startsWith("Kunde ")?key:"Prosjekt "+key, io=ioOf(list);
+  openSheet("Send til fakturamottak?",
+    el("div",{},`${navn}: ${list.length} ${list.length===1?"registrering":"registreringer"}, ${NOK.format(list.reduce((a,u)=>a+uSum(u),0))}`+(io?`, ${io.nr}`:"")+"."),
+    el("div",{class:"it-var",style:"margin-top:6px"},`IO-PDF-en sendes på e-post til ${FAKTURA_EPOST}, og uttakene merkes som sendt.`),
+    el("div",{class:"actions"},
+      el("button",{class:"btn primary",type:"button",onclick:()=>{ closeSheet(); rgSendAuto(key,list); }},"Send nå"),
+      el("button",{class:"btn",type:"button",onclick:closeSheet},"Avbryt")));
+}
+async function rgSendAuto(key,list){
+  if(rgBusy) return; rgBusy=true; toast("Sender til fakturamottak …");
+  try{ await arkSikre(list); }catch{}
+  let io=null; try{ io=await ioSikre(key,list); }catch{}
+  const name=rgFile(key,io), subj=`${io?io.nr+" – ":""}IO ${key.startsWith("Kunde ")?key:"prosjekt "+key} ${fmtDate(io?io.dato:today())}`;
+  try{
+    if(!window.ghvSendIO) throw new Error("Sending er ikke satt opp");
+    await window.ghvSendIO({filnavn:name, emne:subj, tekst:`Vedlagt: ${name}\n\nSendt fra Lageruttak, GHV Arendal.`, pdf:projectPdf(key,list,io)});
+    rgBusy=false; await rgMark(key,list); toast(`Sendt til ${FAKTURA_EPOST}${io?" ("+io.nr+")":""}`);
+  }catch(e){
+    rgBusy=false;
+    openSheet("Sendingen feilet",
+      el("div",{},`E-posten ble ikke sendt. ${e&&e.message?e.message:""}`),
+      el("div",{class:"it-var",style:"margin-top:6px"},"Uttakene er ikke merket som sendt. Du kan prøve igjen, eller laste ned PDF-en og sende den selv."),
+      el("div",{class:"actions"},
+        el("button",{class:"btn primary",type:"button",onclick:()=>{ closeSheet(); rgSendAuto(key,list); }},"Prøv igjen"),
+        el("button",{class:"btn",type:"button",onclick:()=>{ closeSheet(); rgMailManuell(key,list); }},"Send selv"),
+        el("button",{class:"btn",type:"button",onclick:closeSheet},"Lukk")));
+  }
+  finally{ rgBusy=false; }
+}
+async function rgMailManuell(key,list){
   if(rgBusy) return; if(!prices){ toast("Prislisten er ikke lastet ennå"); return; } rgBusy=true;
   try{ await arkSikre(list); }catch{}
   let io=null; try{ io=await ioSikre(key,list); }catch{}
