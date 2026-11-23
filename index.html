@@ -1469,6 +1469,39 @@ async function skApprove(p,likevel){
   }catch(e){ toast("Arket ble ikke lagret. Prøv igjen."); }
   finally{ skBusy=false; skRender(); }
 }
+/* ---------- Brukere og roller (bare admin) ---------- */
+const ROLLER=[["admin","Admin (kontor) – ser alt"],["kontroll","Kontroll – sjekker ark, sender til regnskap, bestiller"],["montor","Montør – ser uttak, ingen priser"],["","Ingen tilgang"]];
+async function brukereVis(){
+  const liste=el("div",{},el("div",{class:"it-var"},"Henter brukere …"));
+  const selRolle=(v)=>{ const s=el("select",{style:"height:40px;padding:0 8px;border:1.5px solid var(--line);border-radius:4px;background:var(--surface)"},...ROLLER.map(([k,t])=>el("option",{value:k},t))); s.value=v||""; return s; };
+  const inp=(ph,type)=>el("input",{placeholder:ph,type:type||"text",autocomplete:"off",style:"height:40px;padding:0 8px;border:1.5px solid var(--line);border-radius:4px;background:var(--surface);width:100%"});
+  const nyId=inp("Bruker-ID (vises når personen logger inn første gang)"), nyNavn=inp("Navn"), nyEpost=inp("E-post","email"), nyRolle=selRolle("kontroll");
+  const tegn=async()=>{
+    liste.textContent="";
+    let docs=[]; try{ docs=(await db.collection("roller").get()).docs; }catch{ liste.append(el("div",{class:"it-var"},"Kunne ikke hente brukerne.")); return; }
+    docs.sort((a,b)=>(a.data().navn||"").localeCompare(b.data().navn||"","nb"));
+    for(const d of docs){ const x=d.data(), meg=d.id===myId, sel=selRolle(x.rolle);
+      if(meg) sel.disabled=true;
+      liste.append(el("div",{style:"display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)"},
+        el("div",{},el("b",{},x.navn||"(uten navn)"),el("div",{class:"it-var",style:"font-size:.8rem"},[x.epost,meg?"deg":null].filter(Boolean).join(" · ")||d.id)),
+        sel,
+        el("button",{type:"button",class:"btn small",disabled:meg?"":null,onclick:async()=>{
+          try{ if(sel.value) await db.collection("roller").doc(d.id).set({...x,rolle:sel.value}); else await db.collection("roller").doc(d.id).delete();
+            toast(sel.value?`${x.navn||"Brukeren"} er nå ${sel.value}`:`${x.navn||"Brukeren"} har ikke lenger tilgang`); tegn(); }catch{ toast("Endringen ble ikke lagret"); } }},"Lagre"))); }
+    if(!docs.length) liste.append(el("div",{class:"it-var"},"Ingen brukere med rolle ennå."));
+  };
+  openSheet("Brukere og roller",
+    el("div",{class:"it-var",style:"margin-bottom:8px"},"Endre rolle og trykk Lagre. «Ingen tilgang» fjerner personen fra appen. Du kan ikke endre din egen rolle."),
+    liste,
+    el("h3",{style:"margin:18px 0 6px"},"Gi en ny bruker tilgang"),
+    el("div",{class:"it-var",style:"margin-bottom:8px"},"1) Lag kontoen i Firebase → Authentication → Add user. 2) Personen logger inn og ser bruker-ID-en sin. 3) Lim den inn her."),
+    el("div",{style:"display:grid;gap:8px"},nyId,nyNavn,nyEpost,nyRolle),
+    el("div",{class:"actions"},el("button",{type:"button",class:"btn primary",onclick:async()=>{
+      const id=nyId.value.trim(); if(!/^[A-Za-z0-9]{10,}$/.test(id)){ toast("Bruker-ID-en ser ikke riktig ut"); return; }
+      if(!nyRolle.value){ toast("Velg en rolle"); return; }
+      try{ await db.collection("roller").doc(id).set({rolle:nyRolle.value,navn:nyNavn.value.trim(),epost:nyEpost.value.trim()}); toast("Brukeren har fått tilgang"); nyId.value=nyNavn.value=nyEpost.value=""; tegn(); }catch{ toast("Ble ikke lagret"); } }},"Gi tilgang")));
+  tegn();
+}
 /* ---------- Hjem: startside tilpasset rollen ---------- */
 const HJEM={navn:null};
 function renderHjem(){
@@ -1502,6 +1535,7 @@ function renderHjem(){
   const grid=el("div",{class:"hj-grid"});
   for(const k of kort) grid.append(el("a",{href:"#"+k.v,class:"hj-kort"+(k.n?" venter":"")},
     el("span",{class:"hj-t"},k.t), el("span",{class:"hj-d"},k.d), k.n?el("span",{class:"hj-n"},k.nt):null));
+  if(admin) grid.append(el("button",{type:"button",class:"hj-kort",style:"text-align:left;font:inherit;cursor:pointer",onclick:brukereVis},el("span",{class:"hj-t"},"Brukere og roller"),el("span",{class:"hj-d"},"Gi tilgang og endre roller.")));
   host.append(grid);
   host.append(el("h3",{class:"hj-h3"},"Slik går et uttak"),
     el("ol",{class:"hj-steg"},
