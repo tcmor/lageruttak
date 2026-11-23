@@ -1475,7 +1475,7 @@ async function brukereVis(){
   const liste=el("div",{},el("div",{class:"it-var"},"Henter brukere …"));
   const selRolle=(v)=>{ const s=el("select",{style:"height:40px;padding:0 8px;border:1.5px solid var(--line);border-radius:4px;background:var(--surface)"},...ROLLER.map(([k,t])=>el("option",{value:k},t))); s.value=v||""; return s; };
   const inp=(ph,type)=>el("input",{placeholder:ph,type:type||"text",autocomplete:"off",style:"height:40px;padding:0 8px;border:1.5px solid var(--line);border-radius:4px;background:var(--surface);width:100%"});
-  const nyId=inp("Bruker-ID (vises når personen logger inn første gang)"), nyNavn=inp("Navn"), nyEpost=inp("E-post","email"), nyRolle=selRolle("kontroll");
+  const nyNavn=inp("Navn"), nyEpost=inp("E-post","email"), nyPass=inp("Midlertidig passord (bare for nye brukere, minst 6 tegn)","text"), nyRolle=selRolle("kontroll");
   const tegn=async()=>{
     liste.textContent="";
     let docs=[]; try{ docs=(await db.collection("roller").get()).docs; }catch{ liste.append(el("div",{class:"it-var"},"Kunne ikke hente brukerne.")); return; }
@@ -1494,12 +1494,20 @@ async function brukereVis(){
     el("div",{class:"it-var",style:"margin-bottom:8px"},"Endre rolle og trykk Lagre. «Ingen tilgang» fjerner personen fra appen. Du kan ikke endre din egen rolle."),
     liste,
     el("h3",{style:"margin:18px 0 6px"},"Gi en ny bruker tilgang"),
-    el("div",{class:"it-var",style:"margin-bottom:8px"},"1) Lag kontoen i Firebase → Authentication → Add user. 2) Personen logger inn og ser bruker-ID-en sin. 3) Lim den inn her."),
-    el("div",{style:"display:grid;gap:8px"},nyId,nyNavn,nyEpost,nyRolle),
-    el("div",{class:"actions"},el("button",{type:"button",class:"btn primary",onclick:async()=>{
-      const id=nyId.value.trim(); if(!/^[A-Za-z0-9]{10,}$/.test(id)){ toast("Bruker-ID-en ser ikke riktig ut"); return; }
+    el("div",{class:"it-var",style:"margin-bottom:8px"},"Skriv navn, e-post og rolle. Har personen ikke konto fra før, lages den med passordet du skriver her. Gi personen e-post og passord, så kan hen logge inn med en gang og bytte passord med «Glemt passordet?»."),
+    el("div",{style:"display:grid;gap:8px"},nyNavn,nyEpost,nyRolle,nyPass),
+    el("div",{class:"actions"},el("button",{type:"button",class:"btn primary",onclick:async(ev)=>{
+      const epost=nyEpost.value.trim(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(epost)){ toast("Skriv en gyldig e-postadresse"); return; }
       if(!nyRolle.value){ toast("Velg en rolle"); return; }
-      try{ await db.collection("roller").doc(id).set({rolle:nyRolle.value,navn:nyNavn.value.trim(),epost:nyEpost.value.trim()}); toast("Brukeren har fått tilgang"); nyId.value=nyNavn.value=nyEpost.value=""; tegn(); }catch{ toast("Ble ikke lagret"); } }},"Gi tilgang")));
+      const knapp=ev.currentTarget; knapp.disabled=true; knapp.textContent="Gir tilgang …";
+      try{
+        const kall=firebase.app().functions("europe-west1").httpsCallable("giTilgang",{timeout:30000});
+        const r=await kall({epost, navn:nyNavn.value.trim(), rolle:nyRolle.value, passord:nyPass.value});
+        toast(r.data.ny?`Konto laget for ${epost}. Gi personen passordet du skrev.`:`${epost} har fått tilgang`);
+        nyNavn.value=nyEpost.value=nyPass.value=""; tegn();
+      }catch(e){ toast((e&&e.message)||"Ble ikke lagret"); }
+      finally{ knapp.disabled=false; knapp.textContent="Gi tilgang"; }
+    }},"Gi tilgang")));
   tegn();
 }
 /* ---------- Hjem: startside tilpasset rollen ---------- */
