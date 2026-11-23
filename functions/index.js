@@ -151,3 +151,33 @@ exports.sendIO = onCall(
     return { messageId: svar.MessageID || "", til: FAKTURAMOTTAK };
   }
 );
+
+/* Skyfunksjon «giTilgang»: admin gir en person tilgang med e-post, navn, rolle og (for nye) et midlertidig passord.
+ * Finnes kontoen fra før, brukes den. Ellers opprettes den. Rollen skrives til roller/{uid}.
+ */
+const ROLLER = ["admin", "kontroll", "montor"];
+exports.giTilgang = onCall(
+  { region: "europe-west1", timeoutSeconds: 30, memory: "256MiB", maxInstances: 2 },
+  async (req) => {
+    if (!req.auth) throw new HttpsError("unauthenticated", "Logg inn først.");
+    const meg = await admin.firestore().doc(`roller/${req.auth.uid}`).get();
+    if (!meg.exists || meg.data().rolle !== "admin") throw new HttpsError("permission-denied", "Bare admin kan gi tilgang.");
+    const epost = String((req.data || {}).epost || "").trim().toLowerCase();
+    const navn = String((req.data || {}).navn || "").trim().slice(0, 80);
+    const rolle = String((req.data || {}).rolle || "");
+    const passord = String((req.data || {}).passord || "");
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(epost)) throw new HttpsError("invalid-argument", "E-postadressen ser ikke riktig ut.");
+    if (!ROLLER.includes(rolle)) throw new HttpsError("invalid-argument", "Velg en rolle.");
+    let bruker, ny = false;
+    try { bruker = await admin.auth().getUserByEmail(epost); }
+    catch (e) {
+      if (e.code !== "auth/user-not-found") throw new HttpsError("internal", "Kunne ikke slå opp brukeren.");
+      if (passord.length < 6) throw new HttpsError("invalid-argument", "Personen har ingen konto ennå. Skriv et midlertidig passord på minst 6 tegn.");
+      bruker = await admin.auth().createUser({ email: epost, password: passord, displayName: navn || undefined });
+      ny = true;
+    }
+    if (bruker.uid === req.auth.uid) throw new HttpsError("failed-precondition", "Du kan ikke endre din egen rolle her.");
+    await admin.firestore().doc(`roller/${bruker.uid}`).set({ rolle, navn, epost }, { merge: true });
+    return { uid: bruker.uid, ny };
+  }
+);
