@@ -1861,7 +1861,36 @@ function rgGroups(){
   const g={}; for(const u of uttak.filter(u=>!u.fort)) (g[rgKey(u)]=g[rgKey(u)]||[]).push(u);
   return Object.entries(g).sort((a,b)=>a[0].localeCompare(b[0],"nb",{numeric:true}));
 }
-function projectPdf(key,list,io){
+/* Utklipp av toppen på skannede ark (prosjektnr, dato, kunde) til IO og bilag, så regnskap kan kontrollere det som ble lest */
+const TOPP_ANDEL=0.30;
+async function arkTopp(u){
+  let src=null, tmp=false;
+  if(u.skanId){
+    if(window.ghvBildeUrl){ try{ const url=await window.ghvBildeUrl(u.skanId); const r=await fetch(url); if(r.ok){ src=URL.createObjectURL(await r.blob()); tmp=true; } }catch{} }
+    else src="/_blob/"+u.skanId;
+  }
+  else { const sk=SK.pages.find(p=>p.blob&&u.kilde===`Skannet: ${p.file}, side ${p.n}`); if(sk){ src=URL.createObjectURL(sk.blob); tmp=true; } }
+  if(!src) return null;
+  try{
+    const img=await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=src; });
+    const w=img.naturalWidth, h=Math.round(img.naturalHeight*TOPP_ANDEL), sc=Math.min(1,1400/w);
+    const c=document.createElement("canvas"); c.width=Math.round(w*sc); c.height=Math.round(h*sc);
+    const g=c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,c.width,c.height); g.drawImage(img,0,0,w,h,0,0,c.width,c.height);
+    return {data:c.toDataURL("image/jpeg",0.72), ar:c.height/c.width};
+  }catch{ return null; } finally{ if(tmp) URL.revokeObjectURL(src); }
+}
+async function arkToppAlle(list){ const m={}; for(const u of list){ const t=await arkTopp(u); if(t) m[u.id]=t; } return m; }
+function toppBlokk(doc,list,crops,L,R,y,maxY){
+  const med=list.filter(u=>crops&&crops[u.id]); if(!med.length) return y;
+  doc.setFontSize(8.5); doc.setTextColor(110); doc.text("Toppen av de skannede arkene – kontroller prosjektnummer og kunde:",L,y); y+=2.5;
+  for(const u of med){ const t=crops[u.id], w=R-L, h=w*t.ar;
+    if(y+h+7>maxY){ doc.addPage(); y=18; }
+    doc.setFontSize(8); doc.setTextColor(110); doc.text(`${bilagNr(u)}  –  ${(u.kilde||"").replace("Skannet: ","")}`,L,y+3); y+=4.5;
+    try{ doc.addImage(t.data,"JPEG",L,y,w,h); doc.setDrawColor(190); doc.rect(L,y,w,h); }catch{}
+    y+=h+4; }
+  doc.setTextColor(20); doc.setFontSize(10.5); return y+2;
+}
+function projectPdf(key,list,io,crops){
   const doc=new window.jspdf.jsPDF({unit:"mm",format:"a4"}); const L=14,R=196; let y=20;
   try{ doc.setProperties({title:rgFile(key,io).replace(/\.pdf$/,""),subject:`IO ${key}`,author:"GHV Systeminnredning, avd. Arendal"}); }catch{}
   const kunde=list.some(u=>u.type==="kunde"), utenNr=key.startsWith("Kunde "), dates=list.map(u=>u.dato).filter(Boolean).sort();
@@ -1874,7 +1903,7 @@ function projectPdf(key,list,io){
   if(kunde){ const o=list.find(u=>u.orgnr); if(o) meta.splice(2,0,["Orgnr",o.orgnr]); const rf=[...new Set(list.map(u=>u.ref).filter(Boolean))]; if(rf.length) meta.splice(3,0,["Referanse",rf.join(", ")]); }
   if(io) meta.unshift(["IO-nr",io.nr]);
   for(const [k,v] of meta){ doc.setTextColor(110); doc.text(k,L,y); doc.setTextColor(20); doc.setFont("helvetica",k==="Prosjektnr"||k==="Kunde"?"bold":"normal"); doc.text(String(v),L+32,y); doc.setFont("helvetica","normal"); y+=5.8; }
-  y+=5;
+  y+=3; y=toppBlokk(doc,list,crops,L,R,y,270); y+=2;
   const cD=L, cB=L+19, cV=L+42, cN=L+60, cA=R-30, cK=R;
   const head=()=>{ doc.setFontSize(8.5); doc.setTextColor(110); doc.text("Dato",cD,y); doc.text("Bilag",cB,y); doc.text("Varenr",cV,y); doc.text("Vare",cN,y); doc.text("Antall",cA,y,{align:"right"}); doc.text("Kostpris",cK,y,{align:"right"}); y+=2.3; doc.setDrawColor(180); doc.line(L,y,R,y); y+=4.6; doc.setFontSize(9.5); doc.setTextColor(20); };
   head(); let sum=0, miss=0;
@@ -1921,9 +1950,9 @@ async function rgDownload(groups){
   if(rgBusy) return; if(!prices){ toast("Prislisten er ikke lastet ennå"); return; } rgBusy=true;
   try{
     await arkSikre(groups.flatMap(([,l])=>l));
-    if(groups.length===1){ const [k,l]=groups[0]; const io=await ioSikre(k,l); await downloads.save({filename:rgFile(k,io),data:projectPdf(k,l,io)}); toast(io?`PDF lastet ned (${io.nr})`:"PDF lastet ned"); }
+    if(groups.length===1){ const [k,l]=groups[0]; const io=await ioSikre(k,l); await downloads.save({filename:rgFile(k,io),data:projectPdf(k,l,io,await arkToppAlle(l))}); toast(io?`PDF lastet ned (${io.nr})`:"PDF lastet ned"); }
     else { if(!window.JSZip){ toast("Zip er ikke tilgjengelig. Last ned én og én."); return; }
-      const z=new window.JSZip(); for(const [k,l] of groups){ const io=await ioSikre(k,l); z.file(rgFile(k,io),projectPdf(k,l,io)); }
+      const z=new window.JSZip(); for(const [k,l] of groups){ const io=await ioSikre(k,l); z.file(rgFile(k,io),projectPdf(k,l,io,await arkToppAlle(l))); }
       await downloads.save({filename:`Lageruttak_${today()}_${groups.length}_prosjekter.zip`,data:await z.generateAsync({type:"blob"})}); toast(`${groups.length} PDF-er lastet ned i zip`); }
   }catch(e){ if(!(e&&e.code==="declined")) toast("Fila ble ikke lastet ned"); }
   finally{ rgBusy=false; }
@@ -1945,7 +1974,7 @@ async function rgSendAuto(key,list){
   const name=rgFile(key,io), subj=`${io?io.nr+" – ":""}IO ${key.startsWith("Kunde ")?key:"prosjekt "+key} ${fmtDate(io?io.dato:today())}`;
   try{
     if(!window.ghvSendIO) throw new Error("Sending er ikke satt opp");
-    await window.ghvSendIO({filnavn:name, emne:subj, tekst:`Vedlagt: ${name}\n\nSendt fra Lageruttak, GHV Arendal.`, pdf:projectPdf(key,list,io)});
+    await window.ghvSendIO({filnavn:name, emne:subj, tekst:`Vedlagt: ${name}\n\nSendt fra Lageruttak, GHV Arendal.`, pdf:projectPdf(key,list,io,await arkToppAlle(list))});
     rgBusy=false; await rgMark(key,list); toast(`Sendt til ${FAKTURA_EPOST}${io?" ("+io.nr+")":""}`);
   }catch(e){
     rgBusy=false;
@@ -1963,7 +1992,7 @@ async function rgMailManuell(key,list){
   if(rgBusy) return; if(!prices){ toast("Prislisten er ikke lastet ennå"); return; } rgBusy=true;
   try{ await arkSikre(list); }catch{}
   let io=null; try{ io=await ioSikre(key,list); }catch{}
-  const name=rgFile(key,io), blob=projectPdf(key,list,io), subj=`${io?io.nr+" – ":""}IO ${key.startsWith("Kunde ")?key:"prosjekt "+key} ${fmtDate(io?io.dato:today())}`;
+  const name=rgFile(key,io), blob=projectPdf(key,list,io,await arkToppAlle(list)), subj=`${io?io.nr+" – ":""}IO ${key.startsWith("Kunde ")?key:"prosjekt "+key} ${fmtDate(io?io.dato:today())}`;
   try{
     const file=new File([blob],name,{type:"application/pdf"});
     if(navigator.canShare && navigator.canShare({files:[file]})){
@@ -2039,7 +2068,7 @@ async function arkSikre(list){
   const nr=await arkNye(mangler.length);
   for(let i=0;i<mangler.length;i++){ try{ await db.collection("uttak").doc(mangler[i].id).update({arkNr:nr[i]}); mangler[i].arkNr=nr[i]; }catch{} }
 }
-function bilagPage(doc,u){
+function bilagPage(doc,u,crops){
   const L=18, R=192, s=sign(u); let y=22;
   const line=yy=>{ doc.setDrawColor(190); doc.line(L,yy,R,yy); };
   doc.setFont("helvetica","bold"); doc.setFontSize(17); doc.setTextColor(20); doc.text(typeTxt(u),L,y);
@@ -2048,7 +2077,7 @@ function bilagPage(doc,u){
   const meta=[["Dato",fmtDate(u.dato)],["Montør",u.montor||""],["Fra",fraTxt(u)],["Til",tilTxt(u)]];
   if(u.type==="kunde"){ if(u.orgnr) meta.push(["Orgnr",u.orgnr]); if(u.ref) meta.push(["Referanse",u.ref]); }
   for(const [k,v] of meta){ doc.setTextColor(110); doc.text(k,L,y); doc.setTextColor(20); doc.setFont("helvetica",k==="Til"||k==="Fra"?"bold":"normal"); doc.text(String(v),L+26,y); doc.setFont("helvetica","normal"); y+=6.2; }
-  y+=5; doc.setFontSize(9); doc.setTextColor(110);
+  y+=3; y=toppBlokk(doc,[u],crops,L,R,y,270); y+=2; doc.setFontSize(9); doc.setTextColor(110);
   const cV=L, cN=L+20, cA=R-36, cK=R;
   const head=()=>{ doc.text("Varenr",cV,y); doc.text("Vare",cN,y); doc.text("Antall",cA,y,{align:"right"}); doc.text("Kostpris",cK,y,{align:"right"}); y+=2.5; line(y); y+=5; };
   head(); doc.setFontSize(10); doc.setTextColor(20);
@@ -2079,8 +2108,9 @@ async function bilagPdf(list){
   pdfBusy=true;
   try{
     await arkSikre(list);
+    const crops=await arkToppAlle(list);
     const doc=new window.jspdf.jsPDF({unit:"mm",format:"a4"});
-    list.forEach((u,i)=>{ if(i) doc.addPage(); bilagPage(doc,u); });
+    list.forEach((u,i)=>{ if(i) doc.addPage(); bilagPage(doc,u,crops); });
     const u=list[0];
     const name = list.length===1 ? `bilag-${(pnr(u)||"uttak").replace(/[^\wæøåÆØÅ-]+/g,"_")}-${u.dato||today()}-${u.id.slice(0,8)}.pdf` : `bilag-lageruttak-${today()}-${list.length}stk.pdf`;
     await downloads.save({filename:name,data:doc.output("blob")});
