@@ -1566,12 +1566,14 @@ function renderHjem(){
     el("div",{},el("b",{},"Salg til kunde: "),"prosjekt 202626")));
 }
 /* ---------- Innboks: ark sendt på e-post (fra kopimaskinen) ---------- */
-let innboks=[], innboksBusy=false;
+let innboks=[], innboksHentet=[], innboksBusy=false;
 function innboksRender(){
   if(!$("#v-hjem").hidden) renderHjem();
   const box=$("#sk-innboks"); if(!box) return;
-  box.hidden=!isOffice||!innboks.length;
-  if(!innboks.length) return;
+  box.hidden=!isOffice||(!innboks.length&&!innboksHentet.length);
+  innboksTidligere();
+  $("#sk-innboks-hent").hidden=!innboks.length;
+  if(!innboks.length){ $("#sk-innboks-txt").textContent="Ingen nye filer."; $("#sk-innboks-liste").textContent=""; return; }
   $("#sk-innboks-txt").textContent=innboks.length===1?"1 fil har kommet inn og venter på å bli lest.":`${innboks.length} filer har kommet inn og venter på å bli lest.`;
   const l=$("#sk-innboks-liste"); l.textContent="";
   for(const x of innboks) l.append(el("div",{},`${x.fil}`, el("span",{class:"it-var"},` – ${x.fra||"ukjent avsender"}, ${x.mottatt?new Date(x.mottatt).toLocaleString("no-NO",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):""}`)));
@@ -1590,12 +1592,23 @@ async function innboksHent(){
   if(filer.length) skAddFiles(filer);
 }
 $("#sk-innboks-hent").addEventListener("click",innboksHent);
+/* Filer som allerede er hentet kan hentes igjen (f.eks. etter at siden ble lastet på nytt før arkene var godkjent) */
+function innboksTidligere(){
+  let h=$("#sk-innboks-tidl"); if(!h){ h=el("div",{id:"sk-innboks-tidl",style:"margin-top:12px"}); $("#sk-innboks").append(h); }
+  h.textContent=""; if(!innboksHentet.length) return;
+  h.append(el("div",{class:"it-var",style:"font-weight:600;margin-bottom:4px"},"Tidligere hentet – hent igjen hvis arkene forsvant før de ble godkjent:"));
+  for(const x of innboksHentet) h.append(el("div",{style:"display:flex;justify-content:space-between;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-size:.9rem"},
+    el("span",{},x.fil, el("span",{class:"it-var"},` – hentet ${x.hentet?new Date(x.hentet).toLocaleString("no-NO",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):""}`)),
+    el("button",{type:"button",class:"btn small",onclick:async()=>{ try{ const blob=await window.ghvHentFil(x.sti); skAddFiles([new File([blob],x.fil,{type:x.type||blob.type})]); toast(`${x.fil} hentes igjen. Ark som allerede er godkjent, merkes som duplikat.`); }catch{ toast(`Kunne ikke hente ${x.fil}`); } }},"Hent igjen")));
+}
 $("#sk-file").addEventListener("change",e=>{ const f=[...(e.target.files||[])]; e.target.value=""; if(f.length) skAddFiles(f); });
 const skDrop=$("#sk-drop");
 ["dragover","dragenter"].forEach(t=>skDrop.addEventListener(t,e=>{ e.preventDefault(); skDrop.classList.add("over"); }));
 ["dragleave","drop"].forEach(t=>skDrop.addEventListener(t,()=>skDrop.classList.remove("over")));
 skDrop.addEventListener("drop",e=>{ e.preventDefault(); const f=[...(e.dataTransfer.files||[])]; if(f.length) skAddFiles(f); });
 $("#sk-stop").addEventListener("click",()=>{ if(SK.ctl) SK.ctl.abort(); });
+/* Advarer før siden lukkes eller lastes på nytt mens det finnes leste ark som ikke er godkjent */
+window.addEventListener("beforeunload",e=>{ if(SK.pages.some(p=>["venter","leser","ferdig"].includes(p.status))){ e.preventDefault(); e.returnValue=""; } });
 $("#sk-review").addEventListener("click",()=>skOpen(0));
 $("#sk-approve-all").addEventListener("click",async()=>{ const alle=SK.pages.filter(p=>p.status==="ferdig"&&skReady(p)); const dup=alle.filter(p=>skDup(p)); for(const p of alle.filter(p=>!skDup(p))) await skApprove(p); if(dup.length) toast(`${dup.length} mulige duplikater er ikke godkjent. Sjekk dem enkeltvis.`); });
 $("#skq-close").addEventListener("click",skClose);
@@ -2201,6 +2214,7 @@ buildItems(); renderCustom(); filterItems(); setMode(mode); applyRole();
     db.collection("config").doc("salg").onSnapshot(s=>{ const d=s.exists&&s.data(); if(d&&d.glava){ SALG.glava={...SALG.glava,...d.glava}; store.set("lageruttak-glavarabatt",SALG.glava); } if(!$("#v-salg").hidden) salgRender(); },()=>{});
     db.collection("config").doc("leverandorer").onSnapshot(s=>{ levInfo=(s.exists&&s.data())||{}; if(!$("#v-bestill").hidden) bsRender(); },()=>{});
     db.collection("bestillinger").orderBy("opprettet","desc").limit(200).onSnapshot(s=>{ bestillinger=s.docs.map(d=>({id:d.id,...d.data()})); if(!$("#v-bestill").hidden) bsArkiv(); },()=>{});
+    db.collection("innboks").where("status","==","hentet").limit(80).onSnapshot(s=>{ innboksHentet=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(b.hentet||"").localeCompare(String(a.hentet||""))).slice(0,15); innboksRender(); },()=>{});
     db.collection("innboks").where("status","==","ny").onSnapshot(s=>{ innboks=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(a.mottatt).localeCompare(String(b.mottatt))); innboksRender(); },()=>{});
     db.collection("kost").limit(1000).onSnapshot(s=>{ kost=Object.fromEntries(s.docs.map(d=>[d.id,d.data()])); if(!$("#v-uttak").hidden) renderUttak(); if(!$("#v-salg").hidden) salgRender(); if(!$("#v-hjem").hidden) renderHjem(); },()=>{ toast("Kunne ikke hente kostpriser. Last siden på nytt."); });
   }
