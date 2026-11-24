@@ -1433,13 +1433,22 @@ async function skShow(i){
     sel.value=l.vareId||"";
     const iPk=inp(l.pk||"","text","decimal"), iStk=inp(l.stk||"","text","decimal"), iN=inp(l.beskrivelse), iA=inp(l.antall||"","text","decimal"), iE=inp(l.enhet||"stk"), iPr=inp(l.pris??"","text","decimal");
     const reg=el("div",{class:"fields"},fld("Pakker",iPk),fld("Løse stk",iStk));
+    const iLs=inp(l.lmStk||(!l.lmMm&&l.stk)||"","text","decimal"), iLm=inp(l.lmMm||"","text","numeric"), iLl=inp(!l.lmStk&&l.pk?l.pk:"","text","decimal");
+    const lmInfo=el("div",{class:"it-var",style:"grid-column:1/-1"});
+    const lmReg=el("div",{class:"fields"},fld("Antall stk",iLs),fld("Lengde per stk (mm)",iLm),fld("Eller løpemeter direkte",iLl),lmInfo);
+    const lmOppd=()=>{ const s2=Number(String(iLs.value).replace(",","."))||0, m2=Number(String(iLm.value).replace(",","."))||0; lmInfo.textContent=s2&&m2?`= ${String(Math.round(s2*m2/100)/10).replace(".",",")} løpemeter`:"Fyll inn antall og lengde i mm, eller løpemeter direkte."; };
+    [iLs,iLm].forEach(x=>x.addEventListener("input",lmOppd)); lmOppd();
     const fri=el("div",{class:"fields"},el("div",{class:"field wide"},el("label",{},"Varenavn"),iN),fld("Antall",iA),fld("Enhet",iE),fld("Kostpris per enhet (kr)",iPr));
-    const sync=()=>{ reg.hidden=!sel.value; fri.hidden=!!sel.value; }; sel.addEventListener("change",sync); sync();
+    const erLm=()=>!!(sel.value&&PBY[sel.value]&&PBY[sel.value].unit==="lm");
+    const sync=()=>{ const lm=erLm(); reg.hidden=!sel.value||lm; lmReg.hidden=!lm; fri.hidden=!!sel.value; }; sel.addEventListener("change",sync); sync();
     body.push(el("h2",{},l.beskrivelse||"Linje"), el("p",{class:"it-var"},l.sporsmal||"Sjekk vare og antall."), crop?el("div",{class:"scan"},crop):null,
-      el("div",{class:"field",style:"margin-bottom:10px"},el("label",{},"Vare"),sel), reg, fri,
+      el("div",{class:"field",style:"margin-bottom:10px"},el("label",{},"Vare"),sel), reg, lmReg, fri,
       el("div",{class:"actions"},el("button",{type:"button",class:"btn small danger",onclick:()=>{ d.linjer.splice(q.i,1); skQ=skQ.filter(x=>x!==q).map(x=>x.p===p&&x.kind==="linje"&&x.i>q.i?{...x,i:x.i-1}:x); skRender(); skShow(Math.min(skI,skQ.length-1)); }},"Fjern linjen")));
     const num=v=>{ const x=Number(String(v).replace(/\s/g,"").replace(",",".")); return isFinite(x)&&x>0?x:0; };
-    save=()=>{ l.vareId=sel.value||null; if(l.vareId){ l.pk=num(iPk.value); l.stk=num(iStk.value); } else { l.beskrivelse=iN.value.trim()||l.beskrivelse; l.antall=num(iA.value); l.enhet=iE.value.trim()||"stk"; const pr=num(iPr.value); l.pris=iPr.value.trim()===""?null:pr; }
+    save=()=>{ l.vareId=sel.value||null;
+      if(l.vareId&&erLm()){ const s2=num(iLs.value), m2=num(iLm.value);
+        if(s2&&m2){ l.lmStk=s2; l.lmMm=m2; l.pk=Math.round(s2*m2/100)/10; } else { l.lmStk=null; l.lmMm=null; l.pk=num(iLl.value); } l.stk=0; }
+      else if(l.vareId){ l.pk=num(iPk.value); l.stk=num(iStk.value); } else { l.beskrivelse=iN.value.trim()||l.beskrivelse; l.antall=num(iA.value); l.enhet=iE.value.trim()||"stk"; const pr=num(iPr.value); l.pris=iPr.value.trim()===""?null:pr; }
       l.ok=true; l.sikker=true; };
   }
   const b=$("#skq-body"); b.textContent=""; b.append(...body.filter(Boolean));
