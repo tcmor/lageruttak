@@ -1619,6 +1619,12 @@ $("#skq").addEventListener("click",e=>{ if(e.target.id==="skq") skClose(); });
 const SALGSPROSJEKT="202626";   // alt som går på dette prosjektet er salg til kunde
 function salgLagre(){ store.set("lageruttak-glavarabatt",SALG.glava); if(db) db.collection("config").doc("salg").set({glava:SALG.glava,endret:new Date().toISOString()}).catch(()=>{}); }
 const SALG={vis:"ikke", sort:store.get("lageruttak-salgsort","kunde"), q:"", apne:new Set(), paslag:store.get("lageruttak-paslag",{paa:true,pst:30}), glava:store.get("lageruttak-glavarabatt",{paa:true,rabatt:30})};
+/* Antall stk når linjen er ført i pakker, f.eks. «2 pk» → «= 50 stk» */
+function antStk(l){
+  if(l.custom) return null; const p=PBY[l.id]; if(!p||p.unit==="lm"||!(p.perPk>1)||!l.pk) return null;
+  const n=(l.pk||0)*p.perPk+(l.stk||0);
+  return el("div",{style:"color:var(--muted);font-size:.8rem;white-space:nowrap"},`= ${n} stk`);
+}
 function enhPris(l,sum){
   if(sum==null) return "–";
   const p=!l.custom&&PBY[l.id], lm=p&&p.unit==="lm";
@@ -1668,7 +1674,7 @@ function salgRender(){
     if(open){
       const rows=(u.linjer||[]).map((l,i)=>{ const s=salgLinje(u,i);
         return el("tr",{},el("td",{},el("div",{},[l.n,l.v].filter(Boolean).join(", ")),el("div",{style:"color:var(--muted);font-size:.78rem"},[l.vnr?`nr ${l.vnr}`:null,s.kilde].filter(Boolean).join(", "))),
-          el("td",{class:"n"},qtyText(l)), el("td",{class:"n"},enhPris(l,s.inn)), el("td",{class:"n pst"},pst(s.inn,s.ut)), el("td",{class:"n"},enhPris(l,s.ut)), el("td",{class:"n"+(s.ut==null?" mp":"")},s.ut==null?"–":NOK2.format(s.ut))); });
+          el("td",{class:"n"},qtyText(l),antStk(l)), el("td",{class:"n"},enhPris(l,s.inn)), el("td",{class:"n pst"},pst(s.inn,s.ut)), el("td",{class:"n"},enhPris(l,s.ut)), el("td",{class:"n"+(s.ut==null?" mp":"")},s.ut==null?"–":NOK2.format(s.ut))); });
       card.append(el("div",{class:"card-b"},
         el("div",{class:"tblwrap"},el("table",{},el("thead",{},el("tr",{},el("th",{},"Vare"),el("th",{class:"n"},"Antall"),el("th",{class:"n"},"Innpris pr enhet"),el("th",{class:"n"},"Påslag"),el("th",{class:"n"},"Utpris pr enhet"),el("th",{class:"n"},"Sum utpris"))),el("tbody",{},rows),
           el("tfoot",{},el("tr",{},el("td",{colspan:"2",style:"text-align:right;font-weight:700"},"Sum"),el("td",{class:"n",style:"color:var(--muted)"},`inn ${NOK2.format(t.inn)}`),el("td",{class:"n pst",style:"font-weight:700"},pst(t.inn,t.mangler?null:t.ut)),el("td",{},""),el("td",{class:"n",style:"font-weight:700"},NOK2.format(t.ut)))))),
