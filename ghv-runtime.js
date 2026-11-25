@@ -131,7 +131,8 @@
     if (/invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)) return "Feil e-post eller passord.";
     if (/too-many-requests/.test(c)) return "For mange forsøk. Vent litt og prøv igjen.";
     if (/network/.test(c)) return "Ingen nettforbindelse.";
-    return "Det gikk ikke. Prøv igjen.";
+    if (/referer|referrer|api-key|unauthorized-domain/i.test(c + " " + ((err && err.message) || ""))) return "Innlogging er ikke tillatt fra denne adressen ennå (" + c + "). Vent noen minutter og prøv igjen.";
+    return "Det gikk ikke (" + (c || "ukjent feil") + "). Prøv igjen.";
   }
 
   const ready = new Promise(resolve => {
