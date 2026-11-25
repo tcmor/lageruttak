@@ -914,6 +914,7 @@ function applyRole(){
   if(KONTROLL){ $("#tab-etiketter").hidden=true; $("#tab-salg").hidden=true; $("#adminnav").hidden=true; }
   $("#tab-nytt").hidden=!MANUELL;
   $("#tab-nytt").textContent=(!MANUELL&&!isOffice)?"Info":"Nytt uttak";
+  $("#tab-etiketter").hidden=true;   // Etiketter er tatt bort fra menyen
   const nTabs=[...document.querySelectorAll("nav.tabs a")].filter(a=>!a.hidden).length;
   $("nav.tabs").style.gridTemplateColumns = `repeat(${nTabs},1fr)`;
   $("#tab-uttak").textContent = isOffice ? "Uttak" : "Registrert";
@@ -1546,7 +1547,6 @@ function renderHjem(){
     {v:"uttak",t:"Til regnskap",d:"IO-PDF per prosjekt til fakturamottak.",n:antRegnskap,nt:antRegnskap===1?"1 prosjekt venter":`${antRegnskap} prosjekter venter`},
     admin?{v:"salg",t:"Salg",d:"Kundeuttak på prosjekt 202626 med utpris.",n:antSalg,nt:antSalg===1?"1 salg ikke fakturert":`${antSalg} salg ikke fakturert`}:null,
     {v:"bestill",t:"Bestill",d:"Bestilling per leverandør."},
-    admin?{v:"etiketter",t:"Etiketter",d:"QR-etiketter til hyller og pakker."}:null,
     {v:"priser",t:"Priser",d:kontroll?"Innpris og kostpris for alle varer.":"Innpris, utpris og innkjøpskilde for alle varer."}
   ].filter(Boolean);
   const grid=el("div",{class:"hj-grid"});
