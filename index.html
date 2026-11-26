@@ -1599,7 +1599,8 @@ function innboksTidligere(){
   h.append(el("div",{class:"it-var",style:"font-weight:600;margin-bottom:4px"},"Tidligere hentet – hent igjen hvis arkene forsvant før de ble godkjent:"));
   for(const x of innboksHentet) h.append(el("div",{style:"display:flex;justify-content:space-between;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-size:.9rem"},
     el("span",{},x.fil, el("span",{class:"it-var"},` – hentet ${x.hentet?new Date(x.hentet).toLocaleString("no-NO",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):""}`)),
-    el("button",{type:"button",class:"btn small",onclick:async()=>{ try{ const blob=await window.ghvHentFil(x.sti); skAddFiles([new File([blob],x.fil,{type:x.type||blob.type})]); toast(`${x.fil} hentes igjen. Ark som allerede er godkjent, merkes som duplikat.`); }catch{ toast(`Kunne ikke hente ${x.fil}`); } }},"Hent igjen")));
+    el("div",{style:"display:flex;gap:6px;flex:none"},el("button",{type:"button",class:"btn small",onclick:async()=>{ try{ const blob=await window.ghvHentFil(x.sti); skAddFiles([new File([blob],x.fil,{type:x.type||blob.type})]); toast(`${x.fil} hentes igjen. Ark som allerede er godkjent, merkes som duplikat.`); }catch{ toast(`Kunne ikke hente ${x.fil}`); } }},"Hent igjen"),
+      el("button",{type:"button",class:"btn small",onclick:async()=>{ try{ await db.collection("innboks").doc(x.id).update({status:"arkivert"}); toast(`${x.fil} er fjernet fra lista`); }catch{ toast("Ble ikke fjernet"); } }},"Fjern"))));
 }
 $("#sk-file").addEventListener("change",e=>{ const f=[...(e.target.files||[])]; e.target.value=""; if(f.length) skAddFiles(f); });
 const skDrop=$("#sk-drop");
